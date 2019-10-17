@@ -71,7 +71,7 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
     if host    != '': self.host     = host
     if port    != 0 : self.port     = port
     if user    != '': self.user     = user
-    if passwrd !=0  : self.password = password
+    if password!=0  : self.password = password
     if timeout !=-1 : self.timeout  = timeout
 
     #connect()
@@ -183,15 +183,33 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
     print(msg)
 
   # upload file
-  def upload_file(upload_file_path):
+  def upload_file(self, upload_file_path):
     try:
-      upload_file1 = open(os.path.join(upload_file_path), 'r')
-      print('Uploading ' + upload_file_path + "...")
-      self.storbinary(cmd='STOR ' + upload_file_path, fp=upload_file1, blocksize=self._blocksize)
-      upload_file1.close()
+      self._log("INFO - open(" + upload_file_path +")")
+      fp = open(upload_file_path, 'r')
+      basename = os.path.basename(upload_file_path)
+      self._log("INFO - basename " + basename)
+      print('storbinary(cmd=STOR ' + basename + ", upload " + upload_file_path + ")")
+      rc = self.storbinary(cmd='STOR ' + basename , fp=fp, blocksize=self._blocksize)
+      fp.close()
       print('Upload finished.')
     except Exception, e:
       self._log("Error uploading file: " + str(e) +"\n")
+
+  def storbinary(self, cmd, fp, blocksize=8192, callback=None, rest=None):
+    self._log("INFO - storbinary" )
+    self.voidcmd('TYPE I')
+    with self.transfercmd(cmd, rest) as conn:
+      while 1:
+        buf = fp.read(blocksize)
+        if not buf: break
+        conn.sendall(buf)
+        if callback: callback(buf)
+      # shutdown ssl layer
+      if isinstance(conn, ssl.SSLSocket):
+        # HACK: Instead of attempting unwrap the connection, pass here
+        pass
+    return self.voidresp()
 
 
 ##############
@@ -271,9 +289,7 @@ if rcfile is not None and thost is not None:
 
 ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers)
 
-#ftps.openSession("financesftp.durham.ca", 990, "testuser", "testpass")
-#ftps.openSession("ftpssl.rbc.com", 20990, userid, passwd)
 ftps.openSession(thost, tport, userid, passwd)
-ftps.upload_file(upload_file)
-print(ftps.retrlines("LIST"))
+ftps.upload_file(upload_file_path=upload_file)
+#print(ftps.retrlines("LIST"))
 ftps.closeSession
