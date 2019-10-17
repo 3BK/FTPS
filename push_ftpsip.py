@@ -108,11 +108,12 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
     if timeout != -1 : self.timeout = timeout
 
     self._log("try to create sock\n")
+    self._log("LogLevel " + str(self.LogLevel))
     try:
       if self.LogLevel > 0: self._log("create_connection()\n")
-      if self.LogLevel > 0: print self.host
-      if self.LogLevel > 0: print self.port
-      if self.LogLevel > 0: print self.timeout
+      if self.LogLevel > 0: self._log("host " + self.host)
+      if self.LogLevel > 0: self._log("port "+ str(self.port))
+      if self.LogLevel > 0: self._log("timeout "+str(self.timeout))
 
       self.sock = socket.create_connection((self.host, self.port), self.timeout)
       self.af   = self.sock.family
@@ -135,15 +136,15 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
       if self.LogLevel > 1: self._log("Makefile()\n")
       self.file = self.sock.makefile('r')
 
+      if self.LogLevel > 1: self._log("getresp()\n")
+      self.welcome = self.getresp()
+
       try:
         cert = self.sock.getpeercert()
-        pprint.pprint(cert)
+        if self.LogLevel > 1: pprint.pprint(cert)
       except Exception as e:
         self._log("ERROR - getpeercert() failed - " + str(e))
 
-      if self.LogLevel > 1: self._log("getresp()\n")
-
-      self.welcome = self.getresp()
       if (self.LogLevel > 1): self._log("INFO - FTPS connect() done: " + self.welcome)
 
     except IOError as e:
@@ -287,9 +288,9 @@ if rcfile is not None and thost is not None:
   sys.stderr.write ("passwd = " + str(len(passwd)) + "\n")
   sys.stderr.write ("file=    " + upload_file + "\n")
 
-ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers)
+ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging)
 
 ftps.openSession(thost, tport, userid, passwd)
+print(ftps.retrlines("LIST"))
 ftps.upload_file(upload_file_path=upload_file)
-#print(ftps.retrlines("LIST"))
 ftps.closeSession
