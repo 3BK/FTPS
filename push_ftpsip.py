@@ -11,6 +11,7 @@ import argparse
 import pprint
 import cryptography
 import hashlib
+#import codecs
 
 FTPTLS_OBJ = ftplib.FTP_TLS
 
@@ -28,6 +29,13 @@ FTPTLS_OBJ = ftplib.FTP_TLS
 # https://stackoverflow.com/questions/12164470/python-ftp-implicit-tls-connection-issue
 # https://stackoverflow.com/questions/5534830/ftpes-ftp-over-explicit-tls-ssl-in-python
 ################################################################################
+
+
+#class utf8_print(pprint.PrettyPrinter):
+#    def format(self, object, context, maxlevels, level):
+#        if isinstance(object, unicode):
+#            return (object.encode('utf8'), True, False)
+#        return pprint.PrettyPrinter.format(self, object, context, maxlevels, level)
 
 class ImplicitFTP_TLS(FTPTLS_OBJ):
   host           = "127.0.0.1"
@@ -69,6 +77,7 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
     FTPTLS_OBJ.set_debuglevel(self,LogLevel)
     FTPTLS_OBJ.set_pasv(self,True)
     FTPTLS_OBJ.ssl_version = ssl.PROTOCOL_TLSv1_2;
+
     FTPTLS_OBJ.__init__(self, host=host, user=user, passwd=passwd, acct=acct, keyfile=keyfile, certfile=certfile, timeout=timeout)
     #self._sock = None
 
@@ -105,6 +114,8 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
 
     #success
     if (self.LogLevel > 1): self._log("INFO - FTPS session successfully opened")
+    #print(self.retrlines("FEAT"))
+    self.voidcmd('FEAT')
 
 
   #Override connect
@@ -147,8 +158,10 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
 
       try:
         cert = self.sock.getpeercert(binary_form=True)
+        ssl.match._hostname(cert,self.host)
         if self.LogLevel > 1:
           print("connect()")
+          pprint.pprint(cert)
           print(ssl.DER_cert_to_PEM_cert(cert))
           print("MD5:    " + hashlib.md5(cert).hexdigest())
           print("SHA1:   " + hashlib.sha1(cert).hexdigest())
@@ -314,7 +327,21 @@ if rcfile is not None and thost is not None:
   sys.stderr.write ("passwd = " + str(len(passwd)) + "\n")
   sys.stderr.write ("file=    " + upload_file + "\n")
 
-ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging)
+context = ssl.create_default_context()
+#context.options |= ssl.PROTOCOL_TLS_CLIENT
+context.options |= ssl.OP_NO_SSLv2
+context.options |= ssl.OP_NO_SSLv3
+context.options |= ssl.OP_NO_TLSv1
+context.options |= ssl.OP_NO_TLSv1_1
+context.options |= ssl.PROTOCOL_TLSv1_2
+#context.options |= ssl.ssl.PROTOCOL_TLSv1_3
+context.verify_mode = ssl.CERT_REQUIRED
+context.check_hostname = True
+context.load_default_certs()
+context.set_ciphers( 'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256')
+
+
+ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging, context=context)
 
 ftps.openSession(thost, tport, userid, passwd)
 #print(ftps.cwd('upload'))
