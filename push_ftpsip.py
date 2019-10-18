@@ -1,5 +1,9 @@
 #!/bin/python
 
+#########################################################
+# TODO: Caution: Document, review and inspect thoroughly 
+#########################################################
+
 import os
 import sys
 import ssl
@@ -9,6 +13,10 @@ import netrc
 import errno
 import argparse
 import pprint
+import cryptography
+
+FTPTLS_OBJ = ftplib.FTP_TLS
+
 ################################################################################
 # ref
 ################################################################################
@@ -24,7 +32,7 @@ import pprint
 # https://stackoverflow.com/questions/5534830/ftpes-ftp-over-explicit-tls-ssl-in-python
 ################################################################################
 
-class ImplicitFTP_TLS(ftplib.FTP_TLS):
+class ImplicitFTP_TLS(FTPTLS_OBJ):
   host           = "127.0.0.1"
   port           = 990
   user           = "anonymous"
@@ -61,10 +69,10 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
     self._ciphers        = ciphers
     self.LogLevel        = LogLevel
 
-    ftplib.FTP_TLS.set_debuglevel(self,LogLevel)
-    ftplib.FTP_TLS.set_pasv(self,True)
-    ftplib.FTP_TLS.ssl_version = ssl.PROTOCOL_TLSv1_2;
-    ftplib.FTP_TLS.__init__(self, host=host, user=user, passwd=passwd, acct=acct, keyfile=keyfile, certfile=certfile, timeout=timeout)
+    FTPTLS_OBJ.set_debuglevel(self,LogLevel)
+    FTPTLS_OBJ.set_pasv(self,True)
+    FTPTLS_OBJ.ssl_version = ssl.PROTOCOL_TLSv1_2;
+    FTPTLS_OBJ.__init__(self, host=host, user=user, passwd=passwd, acct=acct, keyfile=keyfile, certfile=certfile, timeout=timeout)
     #self._sock = None
 
   def openSession(self, host='', port=0, user='', password=None, timeout=-1):
@@ -90,6 +98,14 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
       if (self.logLevel >0): self._log("ERROR - FTPS prot_p() failed - " + str(e))
       raise e
 
+    try:
+      cert = self.sock.getpeercert(binary_form=True)
+      #if self.LogLevel > 1:
+      print( "openSession A")
+      print(ssl.DER_cert_to_PEM_cert(cert))
+    except Exception as e:
+      self._log("ERROR - getpeercert() failed - " + str(e))
+
     #login
     try:
       ret = self.login(user=user, passwd=password)
@@ -100,6 +116,15 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
 
     #success
     if (self.LogLevel > 1): self._log("INFO - FTPS session successfully opened")
+
+    try:
+      cert = self.sock.getpeercert(binary_form=True)
+      #if self.LogLevel > 1:
+      print( "openSession ")
+      print(ssl.DER_cert_to_PEM_cert(cert))
+    except Exception as e:
+      self._log("ERROR - getpeercert() failed - " + str(e))
+
 
   #Override connect
   def connect(self, host='', port=0, timeout=-1):
@@ -140,8 +165,10 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
       self.welcome = self.getresp()
 
       try:
-        cert = self.sock.getpeercert()
-        if self.LogLevel > 1: pprint.pprint(cert)
+        cert = self.sock.getpeercert(binary_form=True)
+        if self.LogLevel > 1:
+          print("connect()")
+          print(ssl.DER_cert_to_PEM_cert(cert))
       except Exception as e:
         self._log("ERROR - getpeercert() failed - " + str(e))
 
@@ -194,22 +221,37 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
       rc = self.storbinary(cmd='STOR ' + basename , fp=fp, blocksize=self._blocksize)
       fp.close()
       print('Upload finished.')
-    except Exception, e:
+    except Exception as e:
       self._log("Error uploading file: " + str(e) +"\n")
 
-  def storbinary(self, cmd, fp, blocksize=8192, callback=None, rest=None):
-    self._log("INFO - storbinary" )
+  def storbinary(self, cmd, fp, blocksize=-1, callback=None, rest=None):
+    if blocksize != -1:
+       self.blocksize=blocksize
+
+    self._log("INFO - storbinary :)" )
     self.voidcmd('TYPE I')
+
+    #try:
+    #  self.voidcmd('TYPE I')
+    #except Exception as e:
+    #  self._log("Error voidcmd  " + str(e) +"\n")
+
     with self.transfercmd(cmd, rest) as conn:
-      while 1:
-        buf = fp.read(blocksize)
-        if not buf: break
-        conn.sendall(buf)
-        if callback: callback(buf)
-      # shutdown ssl layer
-      if isinstance(conn, ssl.SSLSocket):
-        # HACK: Instead of attempting unwrap the connection, pass here
-        pass
+      try:
+        while 1:
+          buf = fp.read(self.blocksize)
+          if not buf: break
+          conn.sendall(buf)
+          self._log("INFO - sendall()" )
+          if callback: callback(buf)
+        # shutdown ssl layer
+        if isinstance(conn, ssl.SSLSocket):
+          # HACK: Instead of attempting unwrap the connection, pass here
+          pass
+      except Exception as e:
+        self._log("Error uploading blocks: " + str(e) +"\n")
+
+    self._log("bye bye")
     return self.voidresp()
 
 
@@ -291,6 +333,7 @@ if rcfile is not None and thost is not None:
 ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging)
 
 ftps.openSession(thost, tport, userid, passwd)
+print(ftps.cwd('pub'))
 print(ftps.retrlines("LIST"))
 ftps.upload_file(upload_file_path=upload_file)
 ftps.closeSession
