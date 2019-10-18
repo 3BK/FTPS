@@ -1,9 +1,5 @@
 #!/bin/python
 
-#########################################################
-# TODO: Caution: Document, review and inspect thoroughly 
-#########################################################
-
 import os
 import sys
 import ssl
@@ -14,6 +10,7 @@ import errno
 import argparse
 import pprint
 import cryptography
+import hashlib
 
 FTPTLS_OBJ = ftplib.FTP_TLS
 
@@ -98,14 +95,6 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
       if (self.logLevel >0): self._log("ERROR - FTPS prot_p() failed - " + str(e))
       raise e
 
-    try:
-      cert = self.sock.getpeercert(binary_form=True)
-      #if self.LogLevel > 1:
-      print( "openSession A")
-      print(ssl.DER_cert_to_PEM_cert(cert))
-    except Exception as e:
-      self._log("ERROR - getpeercert() failed - " + str(e))
-
     #login
     try:
       ret = self.login(user=user, passwd=password)
@@ -116,14 +105,6 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
 
     #success
     if (self.LogLevel > 1): self._log("INFO - FTPS session successfully opened")
-
-    try:
-      cert = self.sock.getpeercert(binary_form=True)
-      #if self.LogLevel > 1:
-      print( "openSession ")
-      print(ssl.DER_cert_to_PEM_cert(cert))
-    except Exception as e:
-      self._log("ERROR - getpeercert() failed - " + str(e))
 
 
   #Override connect
@@ -169,6 +150,9 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
         if self.LogLevel > 1:
           print("connect()")
           print(ssl.DER_cert_to_PEM_cert(cert))
+          print("MD5:    " + hashlib.md5(cert).hexdigest())
+          print("SHA1:   " + hashlib.sha1(cert).hexdigest())
+          print("SHA256: " + hashlib.sha256(cert).hexdigest())
       except Exception as e:
         self._log("ERROR - getpeercert() failed - " + str(e))
 
@@ -333,7 +317,7 @@ if rcfile is not None and thost is not None:
 ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging)
 
 ftps.openSession(thost, tport, userid, passwd)
-print(ftps.cwd('pub'))
+#print(ftps.cwd('upload'))
 print(ftps.retrlines("LIST"))
 ftps.upload_file(upload_file_path=upload_file)
 ftps.closeSession
