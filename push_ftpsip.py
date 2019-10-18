@@ -74,11 +74,14 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
     self._ciphers        = ciphers
     self.LogLevel        = LogLevel
 
+
+
     FTPTLS_OBJ.set_debuglevel(self,LogLevel)
     FTPTLS_OBJ.set_pasv(self,True)
     FTPTLS_OBJ.ssl_version = ssl.PROTOCOL_TLSv1_2;
+    # TODO fix borken context
 
-    FTPTLS_OBJ.__init__(self, host=host, user=user, passwd=passwd, acct=acct, keyfile=keyfile, certfile=certfile, timeout=timeout)
+    FTPTLS_OBJ.__init__(self, host=host, user=user, passwd=passwd, acct=acct, timeout=timeout)
     #self._sock = None
 
   def openSession(self, host='', port=0, user='', password=None, timeout=-1):
@@ -132,8 +135,8 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
       if self.LogLevel > 0: self._log("port "+ str(self.port))
       if self.LogLevel > 0: self._log("timeout "+str(self.timeout))
 
-      self.sock = socket.create_connection((self.host, self.port), self.timeout)
-      self.af   = self.sock.family
+      self.rsock = socket.create_connection((self.host, self.port), self.timeout)
+      self.af   = self.rsock.family
 
       if self.LogLevel > 1: self._log("wrap_socket()\n")
         ###########################################################
@@ -149,7 +152,7 @@ class ImplicitFTP_TLS(FTPTLS_OBJ):
         #################
 
       # openssl ciphers -v ALL | grep ECDHE  | grep RSA | grep AES | grep TLS | cut -d ' ' -f 1
-      self.sock = ssl.wrap_socket(sock=self.sock, keyfile=self.keyfile, certfile=self.certfile, ssl_version=ssl.PROTOCOL_TLSv1_2, ciphers=self._ciphers)
+      self.sock = self.context.wrap_socket(sock=self.rsock, server_hostname=self.host)
       if self.LogLevel > 1: self._log("Makefile()\n")
       self.file = self.sock.makefile('r')
 
@@ -341,7 +344,7 @@ context.load_default_certs()
 context.set_ciphers( 'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256')
 
 
-ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, ciphers=ciphers, LogLevel=debugging, context=context)
+ftps      = ImplicitFTP_TLS(host=thost, user=userid, passwd=passwd, timeout=timeout, port=tport, blocksize=blocksize, certfile=CAfile, context=context, ciphers=ciphers, LogLevel=debugging)
 
 ftps.openSession(thost, tport, userid, passwd)
 #print(ftps.cwd('upload'))
